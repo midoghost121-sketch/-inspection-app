@@ -2,6 +2,7 @@ var reports = JSON.parse(localStorage.getItem('waterReports')) || [];
 var currentPhotos = [];
 var currentReportId = null;
 var itemPhotos = {};
+var isoCount = 0;  // عداد لشهادات الايزو الإضافية
 
 var LOGO_HOLDING = "logo-holding.png";
 var LOGO_SAFETY = "logo-safety.png";
@@ -38,6 +39,7 @@ document.addEventListener('DOMContentLoaded', function() {
     setCurrentDate(); setDefaultDateTime(); updateStats(); buildInspectionItems(); buildCompanyFilter();
     document.getElementById('designCapacity').addEventListener('input', calculateCapacity);
     document.getElementById('actualCapacity').addEventListener('input', calculateCapacity);
+    toggleIsoType(0);
 });
 
 function buildCompanyFilter() {
@@ -103,8 +105,141 @@ function setCurrentDate() { document.getElementById('currentDate').textContent =
 function setDefaultDateTime() { var n=new Date(); document.getElementById('inspectionDate').value=n.toISOString().split('T')[0]; document.getElementById('inspectionTime').value=n.toTimeString().slice(0,5); updateTitleDate(); }
 function updateTitleDate() { var d=document.getElementById('inspectionDate').value; if(d) document.getElementById('reportDateDisplay').textContent=new Date(d+'T00:00:00').toLocaleDateString('ar-EG',{year:'numeric',month:'long',day:'numeric'}); }
 
-function toggleYearField(sid,yid,mid) { var s=document.getElementById(sid),y=document.getElementById(yid),m=document.getElementById(mid); if(s.value==='حاصلة'){y.style.display='block';if(m)m.style.display='none';}else{y.style.display='none';y.value='';if(m)m.style.display='flex';} }
-function toggleIsoType() { var s=document.getElementById('isoStatus'),t=document.getElementById('isoType'),m=document.getElementById('isoTypeMsg'); if(s.value==='حاصلة'){t.style.display='block';m.style.display='none';}else{t.style.display='none';t.value='';m.style.display='flex';} }
+function toggleYearField(sid,yid,mid) { var s=document.getElementById(sid),y=document.getElementById(yid),m=document.getElementById(mid); if(s.value==='حاصلة'){y.style.display='block';if(m)m.style.display='none';}else{y.style.display='none';y.value='';if(m)m.style.display='flex';} if(sid.includes('iso')){updateIsoValidity(sid.replace('isoStatus','').replace('isoYear','').replace('isoType',''));}else if(sid.includes('tsm')){updateTsmValidity(sid.replace('tsmStatus','').replace('tsmYear',''));} }
+function toggleIsoType(indexOrUndefined) { 
+    var indexStr = (indexOrUndefined === undefined || indexOrUndefined === 0 || indexOrUndefined === '') ? '' : indexOrUndefined.toString();
+    var s=document.getElementById('isoStatus'+indexStr);
+    if (!s) { var s=document.getElementById('isoStatus'); }
+    var t=document.getElementById('isoType'+indexStr);
+    if (!t) { var t=document.getElementById('isoType'); }
+    var m=document.getElementById('isoTypeMsg'+indexStr);
+    if (!m) { var m=document.getElementById('isoTypeMsg'); }
+    if(s && t && m) {
+        if(s.value==='حاصلة'){t.style.display='block';m.style.display='none';}else{t.style.display='none';t.value='';m.style.display='block';}
+    }
+}
+
+function addIsoRow() {
+    isoCount++;
+    var container = document.getElementById('additionalIsoContainer');
+    var newRow = document.createElement('div');
+    newRow.className = 'form-row-four iso-additional-row';
+    newRow.setAttribute('data-iso-index', isoCount);
+    newRow.innerHTML = `
+        <div class="form-group">
+            <div class="form-group-header">
+                <label for="isoStatus${isoCount}"><i class="fas fa-certificate"></i> شهادة ايزو ${isoCount + 1}</label>
+                <button type="button" class="btn-icon-small btn-icon-remove" onclick="removeIsoRow(${isoCount})" title="حذف الشهادة">
+                    <i class="fas fa-minus"></i>
+                </button>
+            </div>
+            <select id="isoStatus${isoCount}" onchange="toggleYearField('isoStatus${isoCount}','isoYear${isoCount}','isoYearMsg${isoCount}');toggleIsoType(${isoCount})">
+                <option value="غير حاصلة">غير حاصلة</option>
+                <option value="حاصلة">حاصلة</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label for="isoType${isoCount}"><i class="fas fa-tag"></i> نوع الايزو</label>
+            <input type="text" id="isoType${isoCount}" placeholder="ISO 9001" style="display:none;">
+            <div class="no-cert-msg" id="isoTypeMsg${isoCount}"><i class="fas fa-info-circle"></i> غير حاصلة</div>
+        </div>
+        <div class="form-group">
+            <label for="isoYear${isoCount}"><i class="fas fa-calendar-check"></i> آخر تجديد</label>
+            <input type="number" id="isoYear${isoCount}" placeholder="2022" min="2000" max="2100" style="display:none;" oninput="updateIsoValidity(${isoCount})">
+            <div class="no-cert-msg" id="isoYearMsg${isoCount}"><i class="fas fa-info-circle"></i> غير حاصلة</div>
+        </div>
+        <div class="form-group">
+            <label><i class="fas fa-clock"></i> الصلاحية</label>
+            <div id="isoValidity${isoCount}" class="validity-display no-cert">غير حاصلة</div>
+        </div>
+    `;
+    container.appendChild(newRow);
+}
+
+function removeIsoRow(index) {
+    var row = document.querySelector('.iso-additional-row[data-iso-index="' + index + '"]');
+    if (row) row.remove();
+}
+function updateIsoValidity(index) {
+    var statusEl = document.getElementById('isoStatus' + index);
+    var yearEl = document.getElementById('isoYear' + index);
+    var validityEl = document.getElementById('isoValidity' + index);
+    
+    if (!statusEl || !yearEl || !validityEl) return;
+    
+    var status = statusEl.value;
+    var year = yearEl.value;
+    
+    if (status === 'غير حاصلة') {
+        validityEl.textContent = 'غير حاصلة';
+        validityEl.className = 'validity-display no-cert';
+    } else if (year) {
+        var currentYear = new Date().getFullYear();
+        if (currentYear <= parseInt(year) + 1) {
+            validityEl.textContent = 'سارية';
+            validityEl.className = 'validity-display valid';
+        } else {
+            validityEl.textContent = 'غير سارية';
+            validityEl.className = 'validity-display expired';
+        }
+    } else {
+        validityEl.textContent = 'غير محدد';
+        validityEl.className = 'validity-display';
+    }
+}
+
+function updateTsmValidity(index) {
+    // Handle being called with or without index parameter
+    var indexStr = (index === undefined || index === '') ? '' : index;
+    
+    var statusEl = document.getElementById('tsmStatus' + indexStr);
+    var yearEl = document.getElementById('tsmYear' + indexStr);
+    var validityEl = document.getElementById('tsmValidity' + indexStr);
+    
+    if (!statusEl || !validityEl) return;
+    
+    var status = statusEl.value;
+    var year = yearEl ? yearEl.value : '';
+    
+    if (status === 'غير حاصلة') {
+        validityEl.textContent = 'غير حاصلة';
+        validityEl.className = 'validity-display no-cert';
+    } else if (year) {
+        var currentYear = new Date().getFullYear();
+        if (currentYear <= parseInt(year) + 2) {
+            validityEl.textContent = 'سارية';
+            validityEl.className = 'validity-display valid';
+        } else {
+            validityEl.textContent = 'غير سارية';
+            validityEl.className = 'validity-display expired';
+        }
+    } else {
+        validityEl.textContent = 'غير محدد';
+        validityEl.className = 'validity-display';
+    }
+}
+
+function addIsoCertificate() {
+    var container = document.querySelector('.iso-certificates-container');
+    var certificates = container.querySelectorAll('.iso-certificate');
+    var index = certificates.length;
+    var newCert = document.createElement('div');
+    newCert.className = 'form-row-four iso-certificate';
+    newCert.setAttribute('data-index', index);
+    newCert.innerHTML = `
+        <div class="form-group"><label for="isoStatus${index}"><i class="fas fa-certificate"></i> شهادة الايزو ${index + 1} <button type="button" class="btn btn-small btn-danger remove-iso-btn" onclick="removeIsoCertificate(${index})" title="حذف الشهادة"><i class="fas fa-minus"></i></button></label><select id="isoStatus${index}" onchange="toggleYearField('isoStatus${index}','isoYear${index}','isoYearMsg${index}');toggleIsoType(${index});updateIsoValidity(${index})"><option value="غير حاصلة">غير حاصلة</option><option value="حاصلة">حاصلة</option></select></div>
+        <div class="form-group"><label for="isoType${index}"><i class="fas fa-tag"></i> نوع الايزو</label><input type="text" id="isoType${index}" placeholder="ISO 9001" style="display:none;"><div class="no-cert-msg" id="isoTypeMsg${index}"><i class="fas fa-info-circle"></i> غير حاصلة</div></div>
+        <div class="form-group"><label for="isoYear${index}"><i class="fas fa-calendar-check"></i> آخر تجديد</label><input type="number" id="isoYear${index}" placeholder="2022" min="2000" max="2100" style="display:none;" oninput="updateIsoValidity(${index})"><div class="no-cert-msg" id="isoYearMsg${index}"><i class="fas fa-info-circle"></i> غير حاصلة</div></div>
+        <div class="form-group"><label><i class="fas fa-clock"></i> الصلاحية</label><div id="isoValidity${index}" class="validity-display">غير حاصلة</div></div>
+    `;
+    container.appendChild(newCert);
+}
+
+function removeIsoCertificate(index) {
+    var cert = document.querySelector('.iso-certificate[data-index="' + index + '"]');
+    if (cert) cert.remove();
+    // إعادة ترتيب الindices إذا لزم الأمر، لكن للبساطة، سنتركها كما هي
+}
 function changeCapacityUnit() { document.getElementById('actualUnit').textContent=document.getElementById('capacityUnit').value; calculateCapacity(); }
 
 function calculateCapacity() {
@@ -144,7 +279,91 @@ function handlePhotos(inp){var fs=Array.from(inp.files);if(currentPhotos.length+
 function renderPhotoPreview(){document.getElementById('photoPreview').innerHTML=currentPhotos.map(function(p,i){return '<div class="photo-item"><img src="'+p.data+'" alt="'+(i+1)+'"><button class="photo-remove" onclick="removePhoto('+i+')"><i class="fas fa-times"></i></button></div>';}).join('');}
 function removePhoto(i){currentPhotos.splice(i,1);renderPhotoPreview();}
 
-function collectInspectionData(){var d={};inspectionItems.forEach(function(item){d[item.id]={label:item.label,type:item.type,status:document.getElementById(item.id).value,notes:document.getElementById(item.id+'_notes').value,photo:itemPhotos[item.id]||null};});return d;}
+function collectIsoCertificates() {
+    var certificates = [];
+    // الشهادة الأولى (الأساسية)
+    var status0 = document.getElementById('isoStatus0') || document.getElementById('isoStatus');
+    if (status0) {
+        var id0 = status0.id;
+        var yearId0 = id0.replace('Status', 'Year');
+        var validityId0 = id0.replace('Status', 'Validity');
+        var status = status0.value;
+        var type = document.getElementById(id0.replace('Status', 'Type')).value || null;
+        var year = document.getElementById(yearId0).value || null;
+        var validity = document.getElementById(validityId0) ? document.getElementById(validityId0).textContent : null;
+        certificates.push({ status: status, type: type, year: year, validity: validity });
+    }
+    // الشهادات الإضافية
+    var additionalRows = document.querySelectorAll('.iso-additional-row');
+    additionalRows.forEach(function(row) {
+        var index = row.getAttribute('data-iso-index');
+        var status = document.getElementById('isoStatus' + index).value;
+        var type = document.getElementById('isoType' + index).value || null;
+        var year = document.getElementById('isoYear' + index).value || null;
+        var validity = document.getElementById('isoValidity' + index) ? document.getElementById('isoValidity' + index).textContent : null;
+        certificates.push({ status: status, type: type, year: year, validity: validity });
+    });
+    return certificates;
+}
+
+function addTsmCertificate() {
+    var container = document.querySelector('.tsm-certificates-container');
+    var certificates = container.querySelectorAll('.tsm-certificate');
+    var index = certificates.length;
+    var newCert = document.createElement('div');
+    newCert.className = 'form-row-three tsm-certificate';
+    newCert.setAttribute('data-index', index);
+    newCert.innerHTML = `
+        <div class="form-group"><label for="tsmStatus${index}"><i class="fas fa-award"></i> شهادة TSM ${index + 1} <button type="button" class="btn btn-small btn-danger remove-tsm-btn" onclick="removeTsmCertificate(${index})" title="حذف الشهادة"><i class="fas fa-minus"></i></button></label><select id="tsmStatus${index}" onchange="toggleYearField('tsmStatus${index}','tsmYear${index}','tsmYearMsg${index}');updateTsmValidity(${index})"><option value="غير حاصلة">غير حاصلة</option><option value="حاصلة">حاصلة</option></select></div>
+        <div class="form-group"><label for="tsmYear${index}"><i class="fas fa-calendar-check"></i> سنة الحصول</label><input type="number" id="tsmYear${index}" placeholder="2023" min="2000" max="2100" style="display:none;" onchange="updateTsmValidity(${index})"><div class="no-cert-msg" id="tsmYearMsg${index}"><i class="fas fa-info-circle"></i> غير حاصلة</div></div>
+        <div class="form-group"><label><i class="fas fa-clock"></i> الصلاحية</label><div id="tsmValidity${index}" class="validity-display">غير حاصلة</div></div>
+    `;
+    container.appendChild(newCert);
+}
+
+function removeTsmCertificate(index) {
+    var cert = document.querySelector('.tsm-certificate[data-index="' + index + '"]');
+    if (cert) cert.remove();
+}
+
+function updateTsmValidity(index) {
+    var indexStr = (index === undefined || index === '') ? '' : String(index);
+    var statusEl = document.getElementById('tsmStatus' + indexStr);
+    var yearEl = document.getElementById('tsmYear' + indexStr);
+    var validityEl = document.getElementById('tsmValidity' + indexStr);
+    
+    if (!statusEl || !validityEl) return;
+    
+    var status = statusEl.value;
+    var year = yearEl ? yearEl.value : '';
+    
+    if (status === 'غير حاصلة') {
+        validityEl.textContent = 'غير حاصلة';
+        validityEl.className = 'validity-display no-cert';
+    } else if (year) {
+        var currentYear = new Date().getFullYear();
+        if (currentYear <= parseInt(year) + 2) {
+            validityEl.textContent = 'سارية';
+            validityEl.className = 'validity-display valid';
+        } else {
+            validityEl.textContent = 'غير سارية';
+            validityEl.className = 'validity-display expired';
+        }
+    } else {
+        validityEl.textContent = 'غير محدد';
+        validityEl.className = 'validity-display';
+    }
+}
+
+function collectTsmCertificates() {
+    var certificates = [];
+    // الشهادة الأساسية
+    var status = document.getElementById('tsmStatus').value;
+    var year = document.getElementById('tsmYear').value || null;
+    var validity = document.getElementById('tsmValidity') ? document.getElementById('tsmValidity').textContent : null;
+    certificates.push({ status: status, year: year, validity: validity });
+    return certificates;
+}
 
 function uploadToNextcloud(path,content,ct){var url=NC_URL+'/remote.php/dav/files/'+encodeURIComponent(NC_USER)+path;return fetch(url,{method:'PUT',headers:{'Authorization':'Basic '+btoa(NC_USER+':'+NC_PASS),'Content-Type':ct||'application/octet-stream'},body:content}).then(function(r){if(r.ok||r.status===201||r.status===204)return true;throw new Error(r.status);});}
 function createFolder(p){var url=NC_URL+'/remote.php/dav/files/'+encodeURIComponent(NC_USER)+p;return fetch(url,{method:'MKCOL',headers:{'Authorization':'Basic '+btoa(NC_USER+':'+NC_PASS)}}).then(function(){return true;}).catch(function(){return true;});}
@@ -172,9 +391,7 @@ function saveReport(){
         designCapacity:de?parseFloat(de):null,actualCapacity:ac?parseFloat(ac):null,
         capacityUnit:un,capacityPercentage:(de&&ac)?Math.round((parseFloat(ac)/parseFloat(de))*100):null,
         safetyOfficer:document.getElementById('safetyOfficer').value,stationManager:document.getElementById('stationManager').value,
-        isoStatus:document.getElementById('isoStatus').value,isoType:document.getElementById('isoType').value||null,
-        isoYear:document.getElementById('isoYear').value||null,tsmStatus:document.getElementById('tsmStatus').value,
-        tsmYear:document.getElementById('tsmYear').value||null,
+        isoCertificates:collectIsoCertificates(),tsmCertificates:collectTsmCertificates(),civilProtectionReport:document.getElementById('civilProtectionReport').value||null,
         wspStatus:document.getElementById('wspStatus').value,wspYear:document.getElementById('wspYear').value||null,
         inspectionData:collectInspectionData(),
         overallStatus:document.getElementById('overallStatus').value,severity:document.getElementById('severity').value,
@@ -194,8 +411,35 @@ function generatePDF(report){
     var capHTML='';
     if(report.designCapacity&&report.actualCapacity){var pct=report.capacityPercentage,bc=pct>100?'#dc2626':pct>85?'#f59e0b':'#0d9488';
         capHTML='<tr><td>الطاقة التصميمية</td><td>'+report.designCapacity.toLocaleString()+' '+unit+'</td></tr><tr><td>الطاقة الفعلية</td><td>'+report.actualCapacity.toLocaleString()+' '+unit+'</td></tr><tr><td>نسبة التشغيل</td><td><div class="pdf-capacity-bar"><div class="pdf-capacity-fill" style="width:'+Math.min(pct,100)+'%;background:'+bc+';">'+pct+'%</div></div></td></tr>';}
-    var isoH=report.isoStatus==='حاصلة'?'✅ حاصلة'+(report.isoType?' - '+report.isoType:'')+(report.isoYear?' - '+report.isoYear:''):'❌ غير حاصلة';
-    var tsmH=report.tsmStatus==='حاصلة'?'✅ حاصلة'+(report.tsmYear?' - '+report.tsmYear:''):'❌ غير حاصلة';
+    var isoH = '';
+    if (report.isoCertificates && report.isoCertificates.length > 0) {
+        report.isoCertificates.forEach(function(cert, idx) {
+            if (cert.status === 'حاصلة') {
+                isoH += '✅ حاصلة' + (cert.type ? ' - ' + cert.type : '') + (cert.year ? ' - ' + cert.year : '') + ' (' + cert.validity + ')';
+                if (idx < report.isoCertificates.length - 1) isoH += '<br>';
+            } else {
+                isoH += '❌ غير حاصلة';
+                if (idx < report.isoCertificates.length - 1) isoH += '<br>';
+            }
+        });
+    } else {
+        isoH = '❌ غير حاصلة';
+    }
+    var tsmH = '';
+    if (report.tsmCertificates && report.tsmCertificates.length > 0) {
+        report.tsmCertificates.forEach(function(cert, idx) {
+            if (cert.status === 'حاصلة') {
+                tsmH += '✅ حاصلة' + (cert.year ? ' - ' + cert.year : '') + ' (' + cert.validity + ')';
+                if (idx < report.tsmCertificates.length - 1) tsmH += '<br>';
+            } else {
+                tsmH += '❌ غير حاصلة';
+                if (idx < report.tsmCertificates.length - 1) tsmH += '<br>';
+            }
+        });
+    } else {
+        tsmH = '❌ غير حاصلة';
+    }
+    var civilProtectionH=report.civilProtectionReport==='حاصلة'?'✅ حاصلة':'❌ غير حاصلة';
     var wspH=report.wspStatus==='حاصلة'?'✅ حاصلة'+(report.wspYear?' - '+report.wspYear:''):'❌ غير حاصلة';
 
     var itemsHTML='';
@@ -229,6 +473,7 @@ function generatePDF(report){
         (report.gps.lat?'<tr><td>GPS</td><td>'+report.gps.lat+', '+report.gps.lng+'</td></tr>':'')+capHTML+
         '<tr><td>مسؤول السلامة</td><td>'+report.safetyOfficer+'</td></tr><tr><td>مدير المحطة</td><td>'+report.stationManager+'</td></tr>'+
         '<tr><td>شهادة الايزو</td><td>'+isoH+'</td></tr><tr><td>شهادة TSM</td><td>'+tsmH+'</td></tr>'+
+        '<tr><td>تقرير الحماية المدنية</td><td>'+civilProtectionH+'</td></tr>'+
         '<tr><td>شهادة WSP</td><td>'+wspH+'</td></tr>'+
         '</table></div>'+
         '<div style="page-break-before:always;"></div>'+
@@ -277,8 +522,22 @@ function viewReport(id){
     var capH='';
     if(r.designCapacity&&r.actualCapacity){var pct=r.capacityPercentage,col=pct>100?'#dc2626':pct>85?'#f59e0b':'#0d9488';
         capH='<div class="detail-row"><span class="detail-label">الطاقة التصميمية</span><span class="detail-value">'+r.designCapacity.toLocaleString()+' '+unit+'</span></div><div class="detail-row"><span class="detail-label">الطاقة الفعلية</span><span class="detail-value">'+r.actualCapacity.toLocaleString()+' '+unit+'</span></div><div class="detail-row"><span class="detail-label">نسبة التشغيل</span><span class="detail-value" style="color:'+col+';font-weight:700;">'+pct+'%</span></div>';}
-    var isoC='<div class="detail-row"><span class="detail-label">شهادة الايزو</span><span class="detail-value"><span class="cert-badge '+(r.isoStatus==='حاصلة'?'has-cert':'no-cert')+'">'+(r.isoStatus==='حاصلة'?'✅':'❌')+' '+r.isoStatus+(r.isoType?' - '+r.isoType:'')+(r.isoYear?' - '+r.isoYear:'')+'</span></span></div>';
-    var tsmC='<div class="detail-row"><span class="detail-label">شهادة TSM</span><span class="detail-value"><span class="cert-badge '+(r.tsmStatus==='حاصلة'?'has-cert':'no-cert')+'">'+(r.tsmStatus==='حاصلة'?'✅':'❌')+' '+r.tsmStatus+(r.tsmYear?' - '+r.tsmYear:'')+'</span></span></div>';
+    var isoC = '';
+    if (r.isoCertificates && r.isoCertificates.length > 0) {
+        r.isoCertificates.forEach(function(cert, idx) {
+            isoC += '<div class="detail-row"><span class="detail-label">شهادة الايزو ' + (idx + 1) + '</span><span class="detail-value"><span class="cert-badge ' + (cert.status === 'حاصلة' ? 'has-cert' : 'no-cert') + '">' + (cert.status === 'حاصلة' ? '✅' : '❌') + ' ' + cert.status + (cert.type ? ' - ' + cert.type : '') + (cert.year ? ' - ' + cert.year : '') + ' (' + cert.validity + ')' + '</span></span></div>';
+        });
+    } else {
+        isoC = '<div class="detail-row"><span class="detail-label">شهادة الايزو</span><span class="detail-value"><span class="cert-badge no-cert">❌ غير حاصلة</span></span></div>';
+    }
+    var tsmC = '';
+    if (r.tsmCertificates && r.tsmCertificates.length > 0) {
+        r.tsmCertificates.forEach(function(cert, idx) {
+            tsmC += '<div class="detail-row"><span class="detail-label">شهادة TSM ' + (idx + 1) + '</span><span class="detail-value"><span class="cert-badge ' + (cert.status === 'حاصلة' ? 'has-cert' : 'no-cert') + '">' + (cert.status === 'حاصلة' ? '✅' : '❌') + ' ' + cert.status + (cert.year ? ' - ' + cert.year : '') + ' (' + cert.validity + ')' + '</span></span></div>';
+        });
+    } else {
+        tsmC = '<div class="detail-row"><span class="detail-label">شهادة TSM</span><span class="detail-value"><span class="cert-badge no-cert">❌ غير حاصلة</span></span></div>';
+    }
     var wspC='<div class="detail-row"><span class="detail-label">شهادة WSP</span><span class="detail-value"><span class="cert-badge '+(r.wspStatus==='حاصلة'?'has-cert':'no-cert')+'">'+(r.wspStatus==='حاصلة'?'✅':'❌')+' '+r.wspStatus+(r.wspYear?' - '+r.wspYear:'')+'</span></span></div>';
 
     var itemsH='';
@@ -320,17 +579,39 @@ function deleteReport(id){if(confirm('حذف التقرير؟')){reports=reports
 function updateStats(){document.getElementById('totalReports').textContent=reports.length;document.getElementById('compliantCount').textContent=reports.filter(function(r){return r.overallStatus==='مطابق';}).length;document.getElementById('nonCompliantCount').textContent=reports.filter(function(r){return r.overallStatus==='غير مطابق';}).length;}
 
 function resetForm(){
-    document.getElementById('inspectionForm').reset();currentPhotos=[];itemPhotos={};
+    document.getElementById('inspectionForm').reset();currentPhotos=[];itemPhotos={};isoCount=0;
     document.getElementById('photoPreview').innerHTML='';
     document.getElementById('gpsCoords').className='gps-display';document.getElementById('gpsCoords').dataset.lat='';document.getElementById('gpsCoords').dataset.lng='';
     document.getElementById('capacityBarContainer').style.display='none';
     document.getElementById('reportStationDisplay').textContent='--';
     document.getElementById('reportCompanyDisplay').textContent='--';
     document.getElementById('actualUnit').textContent='م³/يوم';
-    document.getElementById('isoStatus').value='غير حاصلة';document.getElementById('isoType').value='';document.getElementById('isoType').style.display='none';document.getElementById('isoTypeMsg').style.display='flex';
-    document.getElementById('isoYear').value='';document.getElementById('isoYear').style.display='none';document.getElementById('isoYearMsg').style.display='flex';
+    var isoStatusEl = document.getElementById('isoStatus0') || document.getElementById('isoStatus');
+    if (isoStatusEl) {
+        isoStatusEl.value='غير حاصلة';
+        var typeEl = document.getElementById(isoStatusEl.id.replace('Status', 'Type'));
+        var typeMsg = document.getElementById(isoStatusEl.id.replace('Status', 'TypeMsg'));
+        if (typeEl) { typeEl.value=''; typeEl.style.display='none'; }
+        if (typeMsg) typeMsg.style.display='flex';
+        var yearEl = document.getElementById(isoStatusEl.id.replace('Status', 'Year'));
+        var yearMsg = document.getElementById(isoStatusEl.id.replace('Status', 'YearMsg'));
+        if (yearEl) { yearEl.value=''; yearEl.style.display='none'; }
+        if (yearMsg) yearMsg.style.display='flex';
+        var validityEl = document.getElementById(isoStatusEl.id.replace('Status', 'Validity'));
+        if (validityEl) { validityEl.textContent='غير حاصلة'; validityEl.className='validity-display no-cert'; }
+    }
+    // مسح الصفوف الإضافية
+    var container = document.getElementById('additionalIsoContainer');
+    if (container) container.innerHTML='';
+    
     document.getElementById('tsmStatus').value='غير حاصلة';document.getElementById('tsmYear').value='';document.getElementById('tsmYear').style.display='none';document.getElementById('tsmYearMsg').style.display='flex';
+    var tsmValidityDiv = document.getElementById('tsmValidity');
+    if (tsmValidityDiv) {
+        tsmValidityDiv.textContent = 'غير حاصلة';
+        tsmValidityDiv.className = 'validity-display no-cert';
+    }
     document.getElementById('wspStatus').value='غير حاصلة';document.getElementById('wspYear').value='';document.getElementById('wspYear').style.display='none';document.getElementById('wspYearMsg').style.display='flex';
+    document.getElementById('civilDefenseStatus').value='غير حاصلة';
     buildInspectionItems();
     document.querySelectorAll('.severity-btn').forEach(function(b){b.classList.remove('active');});
     document.querySelector('.severity-btn.low').classList.add('active');
